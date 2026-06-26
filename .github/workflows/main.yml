@@ -61,3 +61,12 @@ jobs:
           git add index.html
           git diff --staged --quiet || git commit -m "Status update $(date -u '+%Y-%m-%d %H:%M')"
           git push
+
+      - name: Ping CronSignal
+        if: always()
+        uses: CronSignal/ping-action@v1
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          check-id: ${{ secrets.CRONSIGNAL_CHECK_ID }}
+          ping-on-failure: fail
