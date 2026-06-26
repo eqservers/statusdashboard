@@ -31,6 +31,23 @@ jobs:
             '50064','50066','50067','50068','50069'
           )
 
+          function Convert-UTCToUKTime
+          {
+            [CmdletBinding()]
+            param
+            (
+              [Parameter(Mandatory = $true)] $UTCTime
+            )
+            $UKTime = (Get-Date -Date $UTCTime)
+            if ($UKTime.IsDaylightSavingTime() -eq $true)
+            {
+              $UKTime = $UKTime.AddHours(1)
+            }
+            return $UKTime
+          }
+
+          
+
           $html = Get-Content index.html -Raw
 
           foreach ($port in $ports) {
@@ -47,7 +64,7 @@ jobs:
               "<div class=""server-card"" id=""card-$serverID"" data-online=""$dataValue""><span class=""server-name"">$serverID</span><span class=""status-pill $pillClass"" id=""status-$serverID""><span class=""pulse""></span>$pillText</span></div>"
           }
 
-          $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss" -TimeZone (Get-TimeZone "GMT Standard Time")
+          $timestamp = Convert-UTCToUKTime
           $html = $html -replace '(?<=id="last-updated-time">)[^<]*', $timestamp
 
           Set-Content index.html -Value $html -Encoding UTF8
