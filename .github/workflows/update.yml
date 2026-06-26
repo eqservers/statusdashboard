@@ -2,8 +2,8 @@ name: Update server status
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # every 15 minutes
-  workflow_dispatch:          # also allows manual run
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
