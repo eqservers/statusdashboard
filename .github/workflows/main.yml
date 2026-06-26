@@ -1,9 +1,9 @@
 name: Update server status
 
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
 
 permissions:
   contents: write
@@ -16,6 +16,8 @@ jobs:
 
       - name: Test ports and update HTML
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ports = @(
             '50001','50002','50003','50004','50005','50006',
