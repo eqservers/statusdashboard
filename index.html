@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Server Status Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #F5F4F0;
+      --surface:    #ECEAE4;
+      --surface-2:  #E2E0D9;
+      --border:     #C8C5BC;
+      --border-2:   #B0ADA4;
+      --text:       #1A1A2E;
+      --muted:      #6B7280;
+      --accent:     #6038E8;
+      --accent-dim: #6038E820;
+      --accent-glow:#6038E840;
+      --green:      #00A86B;
+      --green-dim:  #00A86B20;
+      --red:        #CC2929;
+      --red-dim:    #CC292920;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* Progress bar */
+    #progress-bar {
+      position: fixed;
+      top: 0; left: 0;
+      height: 2px;
+      width: 0%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+      z-index: 100;
+      transition: width 0.3s ease;
+    }
+
+    /* Top nav strip */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-dot {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+    }
+
+    .topbar h1 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .topbar-sub {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Summary pills */
+    .stats-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      border: 1px solid;
+    }
+    .stat-chip.online  { background: var(--green-dim);  border-color: var(--green);  color: var(--green); }
+    .stat-chip.offline { background: var(--red-dim);    border-color: var(--red);    color: var(--red); }
+    .stat-chip.total   { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+    .stat-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .timestamp {
+      font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted);
+      padding: 0.3rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+    }
+
+    .timestamp span { color: var(--accent); }
+
+    /* Main content */
+    .main {
+      padding: 1.5rem 2rem 3rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Section header */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .section-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .section-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Grid */
+    .server-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 0.5rem;
+    }
+
+    /* Cards */
+    .server-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.875rem 0.875rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      cursor: default;
+      transition: border-color 0.25s, background 0.25s, transform 0.15s;
+      opacity: 0;
+      transform: translateY(6px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .server-card.revealed {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.25s, background 0.25s;
+    }
+
+    .server-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 0.3s;
+      border-radius: inherit;
+      pointer-events: none;
+    }
+
+    .server-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-2);
+    }
+
+    .server-card:hover::before { opacity: 1; }
+
+    .server-card[data-online="True"] {
+      border-color: #00A86B30;
+    }
+    .server-card[data-online="True"]::before {
+      background: linear-gradient(135deg, #00A86B0A 0%, transparent 60%);
+    }
+    .server-card[data-online="True"]:hover {
+      border-color: #00A86B60;
+    }
+
+    .server-card[data-online="False"] {
+      border-color: #CC292930;
+    }
+    .server-card[data-online="False"]::before {
+      background: linear-gradient(135deg, #CC29290A 0%, transparent 60%);
+    }
+    .server-card[data-online="False"]:hover {
+      border-color: #CC292960;
+    }
+
+    .server-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+
+    /* Status pill */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-radius: 999px;
+      padding: 0.2rem 0.5rem;
+      width: fit-content;
+      border: 1px solid transparent;
+    }
+
+    .status-pill .pulse {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-pill.online {
+      background: var(--green-dim);
+      color: var(--green);
+      border-color: #00A86B30;
+    }
+    .status-pill.online .pulse {
+      background: var(--green);
+      animation: ping 2s ease infinite;
+    }
+
+    .status-pill.offline {
+      background: var(--red-dim);
+      color: var(--red);
+      border-color: #CC292930;
+    }
+    .status-pill.offline .pulse {
+      background: var(--red);
+    }
+
+    .status-pill.unknown {
+      background: #64748b15;
+      color: var(--muted);
+      border-color: #64748b30;
+    }
+    .status-pill.unknown .pulse {
+      background: var(--muted);
+    }
+
+    @keyframes ping {
+      0%   { box-shadow: 0 0 0 0   #00A86B70; }
+      70%  { box-shadow: 0 0 0 4px #00A86B00; }
+      100% { box-shadow: 0 0 0 0   #00A86B00; }
+    }
+
+    /* Scan line animation */
+    @keyframes scanline {
+      0%   { transform: translateY(-100%); opacity: 0.6; }
+      100% { transform: translateY(2000px); opacity: 0; }
+    }
+
+    .scan-line {
+      position: fixed;
+      left: 0; right: 0; top: 0;
+      height: 80px;
+      background: linear-gradient(to bottom, transparent, #6038E818, transparent);
+      pointer-events: none;
+      z-index: 50;
+      animation: scanline 1.8s ease-out forwards;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted);
+      padding: 1.5rem 2rem;
+      border-top: 1px solid var(--border);
+    }
+
+    @media (max-width: 600px) {
+      .topbar { padding: 0.75rem 1rem; flex-wrap: wrap; gap: 0.75rem; }
+      .main { padding: 1rem 1rem 2rem; }
+      .server-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="progress-bar"></div>
+  <div class="scan-line"></div>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo-dot">EQ</div>
+      <div>
+        <h1>Server Status</h1>
+        <p class="topbar-sub">81.246.93.147 &middot; Ports 50001&ndash;50069</p>
+      </div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-chip online">
+        <span class="stat-dot"></span>
+        <span id="count-online">--</span> online
+      </div>
+      <div class="stat-chip offline">
+        <span class="stat-dot"></span>
+        <span id="count-offline">--</span> offline
+      </div>
+      <div class="stat-chip total">
+        <span class="stat-dot"></span>
+        <span id="count-total">--</span> total
+      </div>
+      <div class="timestamp">Updated <span id="last-updated-time">2026-06-26 10:48:21</span></div>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="section-header">
+      <span class="section-label">Terminal Servers</span>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="server-grid" id="server-grid">
+      <div class="server-card" id="card-TS01" data-online="True"><span class="server-name">TS01</span><span class="status-pill online" id="status-TS01"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS02" data-online="True"><span class="server-name">TS02</span><span class="status-pill online" id="status-TS02"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS03" data-online="True"><span class="server-name">TS03</span><span class="status-pill online" id="status-TS03"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS04" data-online="True"><span class="server-name">TS04</span><span class="status-pill online" id="status-TS04"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS05" data-online="True"><span class="server-name">TS05</span><span class="status-pill online" id="status-TS05"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS06" data-online="True"><span class="server-name">TS06</span><span class="status-pill online" id="status-TS06"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS07" data-online="True"><span class="server-name">TS07</span><span class="status-pill online" id="status-TS07"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS08" data-online="True"><span class="server-name">TS08</span><span class="status-pill online" id="status-TS08"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS09" data-online="True"><span class="server-name">TS09</span><span class="status-pill online" id="status-TS09"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS10" data-online="True"><span class="server-name">TS10</span><span class="status-pill online" id="status-TS10"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS11" data-online="True"><span class="server-name">TS11</span><span class="status-pill online" id="status-TS11"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS12" data-online="True"><span class="server-name">TS12</span><span class="status-pill online" id="status-TS12"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS13" data-online="True"><span class="server-name">TS13</span><span class="status-pill online" id="status-TS13"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS14" data-online="True"><span class="server-name">TS14</span><span class="status-pill online" id="status-TS14"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS15" data-online="True"><span class="server-name">TS15</span><span class="status-pill online" id="status-TS15"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS16" data-online="True"><span class="server-name">TS16</span><span class="status-pill online" id="status-TS16"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS17" data-online="True"><span class="server-name">TS17</span><span class="status-pill online" id="status-TS17"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS18" data-online="True"><span class="server-name">TS18</span><span class="status-pill online" id="status-TS18"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS19" data-online="True"><span class="server-name">TS19</span><span class="status-pill online" id="status-TS19"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS20" data-online="True"><span class="server-name">TS20</span><span class="status-pill online" id="status-TS20"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS21" data-online="True"><span class="server-name">TS21</span><span class="status-pill online" id="status-TS21"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS22" data-online="True"><span class="server-name">TS22</span><span class="status-pill online" id="status-TS22"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS23" data-online="True"><span class="server-name">TS23</span><span class="status-pill online" id="status-TS23"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS24" data-online="True"><span class="server-name">TS24</span><span class="status-pill online" id="status-TS24"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS25" data-online="True"><span class="server-name">TS25</span><span class="status-pill online" id="status-TS25"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS26" data-online="True"><span class="server-name">TS26</span><span class="status-pill online" id="status-TS26"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS27" data-online="True"><span class="server-name">TS27</span><span class="status-pill online" id="status-TS27"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS28" data-online="True"><span class="server-name">TS28</span><span class="status-pill online" id="status-TS28"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS29" data-online="True"><span class="server-name">TS29</span><span class="status-pill online" id="status-TS29"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS30" data-online="True"><span class="server-name">TS30</span><span class="status-pill online" id="status-TS30"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS31" data-online="True"><span class="server-name">TS31</span><span class="status-pill online" id="status-TS31"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS32" data-online="True"><span class="server-name">TS32</span><span class="status-pill online" id="status-TS32"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS33" data-online="True"><span class="server-name">TS33</span><span class="status-pill online" id="status-TS33"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS34" data-online="True"><span class="server-name">TS34</span><span class="status-pill online" id="status-TS34"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS35" data-online="True"><span class="server-name">TS35</span><span class="status-pill online" id="status-TS35"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS36" data-online="True"><span class="server-name">TS36</span><span class="status-pill online" id="status-TS36"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS37" data-online="True"><span class="server-name">TS37</span><span class="status-pill online" id="status-TS37"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS38" data-online="True"><span class="server-name">TS38</span><span class="status-pill online" id="status-TS38"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS39" data-online="True"><span class="server-name">TS39</span><span class="status-pill online" id="status-TS39"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS40" data-online="True"><span class="server-name">TS40</span><span class="status-pill online" id="status-TS40"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS41" data-online="True"><span class="server-name">TS41</span><span class="status-pill online" id="status-TS41"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS42" data-online="True"><span class="server-name">TS42</span><span class="status-pill online" id="status-TS42"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS43" data-online="True"><span class="server-name">TS43</span><span class="status-pill online" id="status-TS43"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS44" data-online="True"><span class="server-name">TS44</span><span class="status-pill online" id="status-TS44"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS45" data-online="True"><span class="server-name">TS45</span><span class="status-pill online" id="status-TS45"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS47" data-online="True"><span class="server-name">TS47</span><span class="status-pill online" id="status-TS47"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS48" data-online="True"><span class="server-name">TS48</span><span class="status-pill online" id="status-TS48"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS49" data-online="True"><span class="server-name">TS49</span><span class="status-pill online" id="status-TS49"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS50" data-online="True"><span class="server-name">TS50</span><span class="status-pill online" id="status-TS50"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS51" data-online="True"><span class="server-name">TS51</span><span class="status-pill online" id="status-TS51"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS52" data-online="True"><span class="server-name">TS52</span><span class="status-pill online" id="status-TS52"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS53" data-online="True"><span class="server-name">TS53</span><span class="status-pill online" id="status-TS53"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS54" data-online="True"><span class="server-name">TS54</span><span class="status-pill online" id="status-TS54"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS57" data-online="True"><span class="server-name">TS57</span><span class="status-pill online" id="status-TS57"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS58" data-online="True"><span class="server-name">TS58</span><span class="status-pill online" id="status-TS58"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS59" data-online="True"><span class="server-name">TS59</span><span class="status-pill online" id="status-TS59"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS60" data-online="True"><span class="server-name">TS60</span><span class="status-pill online" id="status-TS60"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS61" data-online="True"><span class="server-name">TS61</span><span class="status-pill online" id="status-TS61"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS62" data-online="True"><span class="server-name">TS62</span><span class="status-pill online" id="status-TS62"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS63" data-online="True"><span class="server-name">TS63</span><span class="status-pill online" id="status-TS63"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS64" data-online="True"><span class="server-name">TS64</span><span class="status-pill online" id="status-TS64"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS66" data-online="True"><span class="server-name">TS66</span><span class="status-pill online" id="status-TS66"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS67" data-online="True"><span class="server-name">TS67</span><span class="status-pill online" id="status-TS67"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS68" data-online="True"><span class="server-name">TS68</span><span class="status-pill online" id="status-TS68"><span class="pulse"></span>Online</span></div>
+      <div class="server-card" id="card-TS69" data-online="True"><span class="server-name">TS69</span><span class="status-pill online" id="status-TS69"><span class="pulse"></span>Online</span></div>
+    </div>
+  </main>
+
+  <footer>
+    EQ Server Status Dashboard
+  </footer>
+
+  <script>
+    (function () {
+      const cards = document.querySelectorAll('.server-card');
+      let online = 0, offline = 0;
+      cards.forEach(card => {
+        const s = card.getAttribute('data-online');
+        if (s === 'True')  online++;
+        if (s === 'False') offline++;
+      });
+      document.getElementById('count-online').textContent  = online;
+      document.getElementById('count-offline').textContent = offline;
+      document.getElementById('count-total').textContent   = cards.length;
+
+      const bar = document.getElementById('progress-bar');
+      let p = 0;
+      const iv = setInterval(() => {
+        p = Math.min(p + Math.random() * 15, 95);
+        bar.style.width = p + '%';
+        if (p >= 95) clearInterval(iv);
+      }, 80);
+
+      cards.forEach((card, i) => {
+        setTimeout(() => {
+          card.classList.add('revealed');
+          if (i === cards.length - 1) {
+            bar.style.width = '100%';
+            bar.style.opacity = '0';
+            bar.style.transition = 'width 0.2s, opacity 0.5s 0.3s';
+          }
+        }, 30 + i * 18);
+      });
+    })();
+  </script>
+
+</body>
+</html>
