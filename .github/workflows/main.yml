@@ -47,7 +47,7 @@ jobs:
               "<div class=""server-card"" id=""card-$serverID"" data-online=""$dataValue""><span class=""server-name"">$serverID</span><span class=""status-pill $pillClass"" id=""status-$serverID""><span class=""pulse""></span>$pillText</span></div>"
           }
 
-          $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+          $timestamp = (Get-Date).AddHours(1).ToString('yyyy-MM-dd HH:mm:ss')
           $html = $html -replace '(?<=id="last-updated-time">)[^<]*', $timestamp
 
           Set-Content index.html -Value $html -Encoding UTF8
